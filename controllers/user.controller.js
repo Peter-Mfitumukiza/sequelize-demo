@@ -1,6 +1,8 @@
 import User from '../models/user.js'
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import hashPassword from '../utils/hashPassword.js';
+import { compare } from 'bcrypt';
 
 dotenv.config();
 
@@ -12,19 +14,23 @@ export const getUsers = async(req,res)=>{
 }
 
 export const saveUser = async(req,res)=>{
+    let user = await User.findOne({ where: { email: req.body.email } });
+    if(user) return res.json({status:"error", message: "Email already taken!"});
+
     let newUser = { ...req.body }
+    newUser.password = await hashPassword(newUser.password);
     await User.create(newUser);
     return res.send({ message: "user created successfully", data: newUser });
 }
 
 export const login = async(req,res)=>{
     let user = await User.findOne({ where: { email: req.body.email } });
-    if(user == null){
-        return res.send("Invalid email or password");
-    }
-    if(user.password != req.body.password){
-        return res.send("Invalid email or password.")
-    }
+
+    if(user == null) return res.send("Invalid email or password");
+    
+    const validPassword = await compare(req.body.password,user.password)
+    if(!validPassword) return res.json('invalid email or password').status(401)
+
     const token  = sign({ ...user }, process.env.JWT_KEY);
     return res.send({message:"Logged in successfully", token});
 }
